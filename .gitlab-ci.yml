@@ -1,0 +1,74 @@
+stages:
+  - build
+  - test
+  - deploy_stage
+  - deploy_prod
+  - infrastructure
+
+variables:
+  DOCKER_DRIVER: overlay2
+  TAG: $CI_COMMIT_TAG
+  STAGE: $CI_COMMIT_REF_NAME 
+  DB_ROOT_PASSWORD: $DB_ROOT_PASSWORD
+  DB_DATABASE: $DB_DATABASE
+  DB_USER: $DB_USER
+  DB_PASSWORD: $DB_PASSWORD
+  NGINX_PORT: $NGINX_PORT
+
+build_wordpress:
+  stage: build
+  before_script:
+    - echo $CI_JOB_TOKEN | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+    - if [ -z "$TAG" ]; then export TAG="develop"; fi
+  script:
+    - |
+      if [[ $STAGE == "stage" ]]; then
+        NGINX_PORT=8080
+      elif [[ $STAGE == "prod" ]]; then
+        NGINX_PORT=8081
+      fi
+    - echo "Nginx port $NGINX_PORT"
+    - echo "Stage $STAGE"
+    - echo "Tag $TAG"
+    - mkdir build
+    - envsubst < docker-compose-template.yml > build/docker-compose.yml
+    - chmod 660 build/docker-compose.yml
+    - docker build ./src/wordpress -t ${CI_REGISTRY}/${CI_PROJECT_PATH}/wordpress:${STAGE}
+    - docker push ${CI_REGISTRY}/${CI_PROJECT_PATH}/wordpress:${STAGE} # $TAG  script:
+  artifacts:
+    paths:
+      - build/
+
+test:
+  stage: test
+  script:  
+    - cp build/docker-compose.yml .
+      #- docker compose pull
+      #- docker compose up
+      #- docker compose down
+      #only:
+      # - stage
+
+deploy_stage:
+  stage: deploy_stage
+  script:  
+    - cp build/docker-compose.yml .
+    - ansible-playbook -v -i ansible_deploy/inventory.yml ansible_deploy/deploy.yml -e env=$STAGE -e ci_job_token=$CI_JOB_TOKEN -e ci_registry_user=$CI_REGISTRY_USER -e ci_registry=$CI_REGISTRY
+  only:
+    - stage
+
+deploy_prod:
+  stage: deploy_prod
+  script:  
+    - cp build/docker-compose.yml .
+    - ansible-playbook -v -i ansible_deploy/inventory.yml ansible_deploy/deploy.yml -e env=$STAGE -e ci_job_token=$CI_JOB_TOKEN -e ci_registry_user=$CI_REGISTRY_USER -e ci_registry=$CI_REGISTRY
+  only:
+    - prod
+  when: manual
+
+deploy_infrastructure:
+    stage: infrastructure
+    script:
+    - echo "Deploying the infrastructure..."
+    - ansible-playbook -v -i ansible_infrastructure/inventory.yml ansible_infrastructure/setup-worker-node.yml -e env=$STAGE
+    when: manual

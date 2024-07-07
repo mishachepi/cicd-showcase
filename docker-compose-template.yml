@@ -1,0 +1,49 @@
+services:
+  db:
+    image: mariadb:11.2.4-jammy
+    container_name: mariadb_${STAGE}
+    restart: always
+    volumes:
+      - db_data_${STAGE}:/var/lib/mysql
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_DATABASE}_${STAGE}
+      MARIADB_USER: ${DB_USER}_${STAGE}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - wordpress-network_${STAGE}
+
+  wordpress:
+    image: ${CI_REGISTRY}/${CI_PROJECT_PATH}/wordpress:${STAGE}
+    container_name: wordpress_${STAGE}
+      #build: src/wordpress
+    restart: unless-stopped
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: ${DB_USER}_${STAGE}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WORDPRESS_DB_NAME: ${DB_DATABASE}_${STAGE}
+    ports:
+      - "${NGINX_PORT}:80"
+    volumes:
+      - wordpress_data_${STAGE}:/var/www/html
+    depends_on:
+      - db
+    networks:
+      - wordpress-network_${STAGE}
+  
+volumes:
+  db_data_${STAGE}:
+    driver_opts:
+      type: none
+      o: bind
+      device: /projects/wordpress/${STAGE}/db_data_${STAGE}
+  wordpress_data_${STAGE}:
+    driver_opts:
+      type: none
+      o: bind
+      device: /projects/wordpress/${STAGE}/wp_data_${STAGE}
+
+networks:
+  wordpress-network_${STAGE}:
+    driver: bridge

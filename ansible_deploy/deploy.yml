@@ -1,0 +1,10 @@
+---
+- hosts: worker_node
+  become: yes
+  vars:
+    env: "{{ env }}"
+    wordpress_dir: "/projects/wordpress/{{ env }}"
+  
+  roles:
+    - wordpress
+      # - nginx

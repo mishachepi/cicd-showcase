@@ -1,0 +1,41 @@
+- name: Create WordPress directory
+  file:
+    path: "{{ wordpress_dir }}"
+    state: directory
+
+- name: Copy docker-compose.yml to remote server
+  copy:
+    src:  ../docker-compose.yml
+    dest: "{{ wordpress_dir }}/docker-compose.yml"
+    force: yes
+
+- name: Login to Docker
+  shell: echo "{{ ci_job_token }}" | docker login -u "{{ ci_registry_user }}" --password-stdin "{{ ci_registry }}"
+    #environment:
+    #CI_JOB_TOKEN: "{{ ci_job_token }}"
+    #CI_REGISTRY_USER: "{{ ci_registry_user }}"
+    #CI_REGISTRY: "{{ ci_registry }}"
+
+- name: Pull new images
+  command: docker compose pull
+  args:
+    chdir: "{{ wordpress_dir }}"
+
+- name: Ensure directories for Docker volumes exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  with_items:
+    - "{{ wordpress_dir }}/db_data_{{ env }}"
+    - "{{ wordpress_dir }}/wp_data_{{ env }}"
+
+- name: Down old compose
+  command: docker compose down
+  args:
+    chdir: "{{ wordpress_dir }}"
+
+- name: Create new compose
+  command: docker compose up -d
+  args:
+    chdir: "{{ wordpress_dir }}"

@@ -1,0 +1,6 @@
+- name: Install common packages
+  apt:
+    name:
+      - vim
+      - curl
+    state: present
